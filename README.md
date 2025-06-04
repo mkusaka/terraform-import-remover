@@ -25,15 +25,15 @@ This tool helps clean up Terraform configurations by stripping out any `import` 
 ### From Source
 
 ```bash
-git clone https://github.com/mkusaka/terraform-import-block-remover.git
-cd terraform-import-block-remover
-go build -o terraform-import-block-remover cmd/terraform-import-block-remover/main.go
+git clone https://github.com/mkusaka/terraform-import-remover.git
+cd terraform-import-remover
+go build -o terraform-import-remover cmd/terraform-import-remover/main.go
 ````
 
 ### Using Go Install
 
 ```bash
-go install github.com/mkusaka/terraform-import-block-remover/cmd/terraform-import-block-remover@latest
+go install github.com/mkusaka/terraform-import-remover/cmd/terraform-import-remover@latest
 ```
 
 This installs the binary to your `$GOPATH/bin`.
@@ -41,7 +41,7 @@ This installs the binary to your `$GOPATH/bin`.
 ## Usage
 
 ```bash
-terraform-import-block-remover [options] [directory]
+terraform-import-remover [options] [directory]
 ```
 
 If you omit `directory`, the current directory is used by default.
@@ -62,7 +62,7 @@ If you omit `directory`, the current directory is used by default.
 ### Example
 
 ```bash
-terraform-import-block-remover -verbose -normalize-whitespace ./infra
+terraform-import-remover -verbose -normalize-whitespace ./infra
 ```
 
 This command will:
