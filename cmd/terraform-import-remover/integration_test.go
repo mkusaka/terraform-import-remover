@@ -237,3 +237,169 @@ resource "aws_instance" "web" {
 		}
 	}
 }
+
+// TestLeadingCommentsPreserved tests that comments preceding import blocks
+// are NOT removed along with the import block.
+func TestLeadingCommentsPreserved(t *testing.T) {
+	testDir, err := os.MkdirTemp("", "terraform-comment-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(testDir)
+
+	// Case 1: Comment directly before import block (no blank line)
+	t.Run("comment_directly_before_import_block", func(t *testing.T) {
+		filePath := filepath.Join(testDir, "case1.tf")
+		input := `resource "aws_instance" "web" {
+  ami           = "ami-123456"
+  instance_type = "t2.micro"
+}
+
+# This comment describes the resource migration
+import {
+  to = aws_instance.web
+  id = "i-abcd1234"
+}
+`
+		if err := os.WriteFile(filePath, []byte(input), 0644); err != nil {
+			t.Fatalf("Failed to write test file: %v", err)
+		}
+
+		stats := Stats{}
+		if err := processFile(filePath, &stats); err != nil {
+			t.Fatalf("processFile failed: %v", err)
+		}
+
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Fatalf("Failed to read modified file: %v", err)
+		}
+
+		result := string(content)
+		t.Logf("Case 1 output:\n%s", result)
+
+		if strings.Contains(result, "import {") {
+			t.Error("import block should have been removed")
+		}
+		if !strings.Contains(result, "# This comment describes the resource migration") {
+			t.Error("Leading comment was removed along with the import block — this is the bug")
+		}
+	})
+
+	// Case 2: Multiple comment lines directly before import block
+	t.Run("multiple_comments_before_import_block", func(t *testing.T) {
+		filePath := filepath.Join(testDir, "case2.tf")
+		input := `resource "aws_instance" "web" {
+  ami           = "ami-123456"
+  instance_type = "t2.micro"
+}
+
+# Description of the migration
+# import id: arn:aws:ec2:us-east-1:123456789012:instance/i-1234567890abcdef0
+import {
+  to = aws_instance.web
+  id = "i-abcd1234"
+}
+`
+		if err := os.WriteFile(filePath, []byte(input), 0644); err != nil {
+			t.Fatalf("Failed to write test file: %v", err)
+		}
+
+		stats := Stats{}
+		if err := processFile(filePath, &stats); err != nil {
+			t.Fatalf("processFile failed: %v", err)
+		}
+
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Fatalf("Failed to read modified file: %v", err)
+		}
+
+		result := string(content)
+		t.Logf("Case 2 output:\n%s", result)
+
+		if !strings.Contains(result, "# Description of the migration") {
+			t.Error("First comment line was removed along with the import block")
+		}
+		if !strings.Contains(result, "# import id:") {
+			t.Error("Second comment line was removed along with the import block")
+		}
+	})
+
+	// Case 3: Blank line separates comment from import block
+	t.Run("comment_separated_by_blank_line", func(t *testing.T) {
+		filePath := filepath.Join(testDir, "case3.tf")
+		input := `resource "aws_instance" "web" {
+  ami           = "ami-123456"
+  instance_type = "t2.micro"
+}
+
+# This comment is separated by a blank line
+
+import {
+  to = aws_instance.web
+  id = "i-abcd1234"
+}
+`
+		if err := os.WriteFile(filePath, []byte(input), 0644); err != nil {
+			t.Fatalf("Failed to write test file: %v", err)
+		}
+
+		stats := Stats{}
+		if err := processFile(filePath, &stats); err != nil {
+			t.Fatalf("processFile failed: %v", err)
+		}
+
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Fatalf("Failed to read modified file: %v", err)
+		}
+
+		result := string(content)
+		t.Logf("Case 3 output:\n%s", result)
+
+		if !strings.Contains(result, "# This comment is separated by a blank line") {
+			t.Error("Comment separated by blank line was unexpectedly removed")
+		}
+	})
+
+	// Case 4: Comment belongs to the NEXT resource, not the import block
+	t.Run("comment_between_import_and_resource", func(t *testing.T) {
+		filePath := filepath.Join(testDir, "case4.tf")
+		input := `resource "aws_instance" "web" {
+  ami           = "ami-123456"
+  instance_type = "t2.micro"
+}
+
+# Describes the S3 bucket below
+import {
+  to = aws_instance.web
+  id = "i-abcd1234"
+}
+
+resource "aws_s3_bucket" "data" {
+  bucket = "my-data-bucket"
+}
+`
+		if err := os.WriteFile(filePath, []byte(input), 0644); err != nil {
+			t.Fatalf("Failed to write test file: %v", err)
+		}
+
+		stats := Stats{}
+		if err := processFile(filePath, &stats); err != nil {
+			t.Fatalf("processFile failed: %v", err)
+		}
+
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Fatalf("Failed to read modified file: %v", err)
+		}
+
+		result := string(content)
+		t.Logf("Case 4 output:\n%s", result)
+
+		if !strings.Contains(result, "# Describes the S3 bucket below") {
+			t.Error("Comment that semantically belongs to another resource was removed with the import block")
+		}
+	})
+}
